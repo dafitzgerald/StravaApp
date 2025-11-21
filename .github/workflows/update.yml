@@ -1,9 +1,12 @@
 name: Update Strava Data
 
+permissions:
+  contents: write   # <-- REQUIRED so workflow can commit changes
+
 on:
   schedule:
-    - cron: "0 10 * * *"  # 10 UTC = 5AM ET
-  workflow_dispatch:      # allows manual run
+    - cron: "0 10 * * *"
+  workflow_dispatch:
 
 jobs:
   update:
@@ -11,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -26,6 +31,7 @@ jobs:
           STRAVA_REFRESH_TOKEN: ${{ secrets.STRAVA_REFRESH_TOKEN }}
         run: python update_strava_data.py
 
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Commit updated data
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Daily Strava update"
