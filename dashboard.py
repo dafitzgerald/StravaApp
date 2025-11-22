@@ -34,6 +34,21 @@ filtered = df[
 # ---------------------
 # WEEKLY MILEAGE
 # ---------------------
+st.subheader("📈 Weekly Mileage")
+
+weekly = (
+    filtered.groupby(["year", "week"])["distance_km"]
+    .sum()
+    .reset_index()
+    .assign(week_str=lambda x: x["year"].astype(str) + "-W" + x["week"].astype(str))
+)
+
+fig = px.bar(weekly, x="week_str", y="distance_km", labels={"distance_km":"km"})
+st.plotly_chart(fig, use_container_width=True)
+
+# ---------------------
+# PACE TREND
+# ---------------------
 st.subheader("⏱ Pace Trend")
 
 pace_df = filtered.copy()
@@ -56,21 +71,6 @@ fig = px.scatter(
 )
 
 st.plotly_chart(fig, use_container_width=True)
-
-# ---------------------
-# PACE TREND
-# ---------------------
-st.subheader("⏱ Pace Trend")
-
-pace_fig = px.scatter(
-    filtered,
-    x="start_date",
-    y="pace_sec_per_km",
-    hover_data=["name", "distance_km"],
-    trendline="lowess",
-    labels={"pace_sec_per_km": "Seconds per km"},
-)
-st.plotly_chart(pace_fig, use_container_width=True)
 
 # ---------------------
 # ROUTE MAP SELECTOR
