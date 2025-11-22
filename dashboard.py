@@ -6,6 +6,7 @@ import requests
 import folium
 from streamlit_folium import st_folium
 import os
+import statsmodels.api as sm
 
 st.set_page_config(page_title="Strava Dashboard", layout="wide")
 
