@@ -33,16 +33,27 @@ filtered = df[
 # ---------------------
 # WEEKLY MILEAGE
 # ---------------------
-st.subheader("📈 Weekly Mileage")
+st.subheader("⏱ Pace Trend")
 
-weekly = (
-    filtered.groupby(["year", "week"])["distance_km"]
-    .sum()
-    .reset_index()
-    .assign(week_str=lambda x: x["year"].astype(str) + "-W" + x["week"].astype(str))
+pace_df = filtered.copy()
+
+# Ensure correct types
+pace_df["start_date"] = pd.to_datetime(pace_df["start_date"], errors="coerce")
+pace_df["pace_sec_per_km"] = pd.to_numeric(pace_df["pace_sec_per_km"], errors="coerce")
+
+# Remove bad data
+pace_df = pace_df.dropna(subset=["start_date", "pace_sec_per_km"])
+pace_df = pace_df[pace_df["pace_sec_per_km"] < 10000]  # filter weird pace values
+
+fig = px.scatter(
+    pace_df,
+    x="start_date",
+    y="pace_sec_per_km",
+    hover_data=["name", "distance_km"],
+    trendline="lowess",
+    labels={"pace_sec_per_km": "Seconds per km"},
 )
 
-fig = px.bar(weekly, x="week_str", y="distance_km", labels={"distance_km":"km"})
 st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------
