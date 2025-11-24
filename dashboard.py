@@ -6,6 +6,7 @@ import requests
 import folium
 from streamlit_folium import st_folium
 import os
+import math
 
 st.set_page_config(page_title="Strava Dashboard", layout="wide")
 
@@ -14,21 +15,41 @@ def load_data():
     return pd.read_parquet("data/runs.parquet")
 
 df = load_data()
+df = df[df['type'] == 'Run'].copy()
 
 st.title("🏃 My Strava Dashboard")
 
 # ---------------------
 # FILTERS
 # ---------------------
-min_date = df["start_date"].min()
-max_date = df["start_date"].max()
+min_date_default = df["start_date"].max() - pd.Timedelta(weeks=12)
+max_date_default = df["start_date"].max()
 
-date_range = st.date_input("Filter by date range:", [min_date, max_date])
+date_range = st.date_input("Filter by date range:", [min_date_default, max_date_default])
 
 filtered = df[
     (df["start_date"].dt.date >= date_range[0]) &
     (df["start_date"].dt.date <= date_range[1])
 ]
+
+#----------------------
+# Overall Metrics
+#----------------------
+
+st.subheader("🔢Overall Metrics")
+
+#Get data
+total_runs = len(filtered)
+total_miles = round(filtered['distance_miles'].sum(),2)
+average_pace_min = filtered['pace_min_per_mile'].mean()
+pace_min = math.trunc(average_pace_min)
+pace_sec = round((average_pace_min % 1)*60)
+pace_display = str(pace_min) + ":" + str(pace_sec) + " min/mile"
+
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Runs", total_runs)
+col2.metric("Total Miles", total_miles)
+col3.metric("Average Pace", pace_display)
 
 # ---------------------
 # WEEKLY MILEAGE
@@ -43,19 +64,19 @@ group_choice = st.radio(
 )
 
 # Default date filter = past 12 weeks
-default_start = df["start_date"].max() - pd.Timedelta(weeks=12)
-
-start_date = st.date_input(
-    "Start date",
-    value=default_start.date(),
-)
+# default_start = df["start_date"].max() - pd.Timedelta(weeks=12)
+#
+# start_date = st.date_input(
+#     "Start date",
+#     value=default_start.date(),
+# )
 
 # Apply date filter
 df["start_date_local"] = (
     pd.to_datetime(df["start_date_local"]).dt.tz_localize(None)
 )
 
-filtered = df[df["start_date_local"] >= pd.to_datetime(start_date)]
+# filtered_new = df[df["start_date_local"] >= pd.to_datetime(start_date)]
 
 if group_choice == "Week":
     grouped = (
@@ -83,7 +104,7 @@ fig = px.bar(
     grouped,
     x="Period",
     y="distance_miles",
-    text="miles",
+    text="distance_miles",
     title=f"Total Mileage per {group_choice}",
 )
 
@@ -100,48 +121,47 @@ st.subheader("⏱ Pace Trend")
 pace_fig = px.scatter(
     filtered,
     x="start_date",
-    y="pace_sec_per_km",
-    hover_data=["name", "distance_km"],
-    trendline="lowess",
-    labels={"pace_sec_per_km": "Seconds per km"},
+    y="pace_min_per_mile",
+    hover_data=["name", "distance_miles"],
+    labels={"pace_min_per_mile": "Min per mile"},
 )
 st.plotly_chart(pace_fig, use_container_width=True)
 
 # ---------------------
 # ROUTE MAP SELECTOR
 # ---------------------
-st.subheader("🗺 View Run Route (GPS Only)")
-
-# select run by name
-run_choice = st.selectbox("Choose a run:", filtered.sort_values("start_date")["name"].unique())
-
-selected = filtered[filtered["name"] == run_choice].iloc[0]
-
-st.write(f"**Selected Run:** {selected['name']}")
-st.write(f"**Distance:** {selected['distance_km']:.2f} km")
-st.write(f"**Date:** {selected['start_date'].date()}")
-
-# Fetch GPS stream
-def fetch_latlng_stream(activity_id, access_token):
-    url = f"https://www.strava.com/api/v3/activities/{activity_id}/streams"
-    params = {"keys": "latlng", "key_by_type": "true"}
-    headers = {"Authorization": f"Bearer {access_token}"}
-    r = requests.get(url, headers=headers, params=params)
-    try:
-        return r.json().get("latlng", {}).get("data")
-    except:
-        return None
-
-# Get token stored from GitHub action? (Optional local)
-token = os.getenv("STRAVA_ACCESS_TOKEN")  # or leave blank for local-only map features
-
-coords = None
-if token:
-    coords = fetch_latlng_stream(selected["id"], token)
-
-if coords:
-    m = folium.Map(location=coords[0], zoom_start=13)
-    folium.PolyLine(coords, weight=4).add_to(m)
-    st_folium(m, width=700, height=500)
-else:
-    st.info("No GPS data available for this run.")
+# st.subheader("🗺 View Run Route (GPS Only)")
+#
+# # select run by name
+# run_choice = st.selectbox("Choose a run:", filtered.sort_values("start_date")["name"].unique())
+#
+# selected = filtered[filtered["name"] == run_choice].iloc[0]
+#
+# st.write(f"**Selected Run:** {selected['name']}")
+# st.write(f"**Distance:** {selected['distance_miles']:.2f} mi")
+# st.write(f"**Date:** {selected['start_date'].date()}")
+#
+# # Fetch GPS stream
+# def fetch_latlng_stream(activity_id, access_token):
+#     url = f"https://www.strava.com/api/v3/activities/{activity_id}/streams"
+#     params = {"keys": "latlng", "key_by_type": "true"}
+#     headers = {"Authorization": f"Bearer {access_token}"}
+#     r = requests.get(url, headers=headers, params=params)
+#     try:
+#         return r.json().get("latlng", {}).get("data")
+#     except:
+#         return None
+#
+# # Get token stored from GitHub action? (Optional local)
+# token = os.getenv("STRAVA_ACCESS_TOKEN")  # or leave blank for local-only map features
+#
+# coords = None
+# if token:
+#     coords = fetch_latlng_stream(selected["id"], token)
+#
+# if coords:
+#     m = folium.Map(location=coords[0], zoom_start=13)
+#     folium.PolyLine(coords, weight=4).add_to(m)
+#     st_folium(m, width=700, height=500)
+# else:
+#     st.info("No GPS data available for this run.")
