@@ -46,9 +46,12 @@ def clean_activities(raw):
     # Normalize fields you tend to use
     df["start_date"] = pd.to_datetime(df["start_date"])
     df["distance_km"] = df["distance"] / 1000
+    df["distance_miles"] = df["distance"] / 1609.34
     df["pace_sec_per_km"] = df["moving_time"] / df["distance_km"]
-    df["week"] = df["start_date"].dt.isocalendar().week
+    df["pace_min_per_mile"] = (df["moving_time"] / 60) / df["distance_miles"]  # min/mile
     df["year"] = df["start_date"].dt.year
+    df["month"] = df["start_date"].dt.to_period("M").astype(str)
+    df["week"] = df["start_date"].dt.to_period("W").apply(lambda r: r.start_time)
 
     return df
 

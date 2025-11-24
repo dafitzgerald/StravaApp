@@ -6,7 +6,6 @@ import requests
 import folium
 from streamlit_folium import st_folium
 import os
-import statsmodels.api as sm
 
 st.set_page_config(page_title="Strava Dashboard", layout="wide")
 
@@ -34,16 +33,63 @@ filtered = df[
 # ---------------------
 # WEEKLY MILEAGE
 # ---------------------
-st.subheader("📈 Weekly Mileage")
+st.subheader("📈 Mileage Over Time")
 
-weekly = (
-    filtered.groupby(["year", "week"])["distance_km"]
-    .sum()
-    .reset_index()
-    .assign(week_str=lambda x: x["year"].astype(str) + "-W" + x["week"].astype(str))
+group_choice = st.radio(
+    "Group mileage by:",
+    ["Week", "Month", "Year"],
+    horizontal=True,
+    index=0,  # Default = Week
 )
 
-fig = px.bar(weekly, x="week_str", y="distance_km", labels={"distance_km":"km"})
+# Default date filter = past 12 weeks
+default_start = df["start_date"].max() - pd.Timedelta(weeks=12)
+
+start_date = st.date_input(
+    "Start date",
+    value=default_start.date(),
+)
+
+# Apply date filter
+df["start_date_local"] = (
+    pd.to_datetime(df["start_date_local"]).dt.tz_localize(None)
+)
+
+filtered = df[df["start_date_local"] >= pd.to_datetime(start_date)]
+
+if group_choice == "Week":
+    grouped = (
+        filtered.groupby("week", as_index=False)
+        .agg({"distance_miles": "sum"})
+        .rename(columns={"week": "Period"})
+    )
+
+elif group_choice == "Month":
+    grouped = (
+        filtered.groupby("month", as_index=False)
+        .agg({"distance_miles": "sum"})
+        .rename(columns={"month": "Period"})
+    )
+
+elif group_choice == "Year":
+    grouped = (
+        filtered.groupby("year", as_index=False)
+        .agg({"distance_miles": "sum"})
+        .rename(columns={"year": "Period"})
+    )
+
+
+fig = px.bar(
+    grouped,
+    x="Period",
+    y="distance_miles",
+    text="miles",
+    title=f"Total Mileage per {group_choice}",
+)
+
+fig.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+fig.update_layout(yaxis_title="Miles")
+
 st.plotly_chart(fig, use_container_width=True)
 
 # ---------------------
@@ -51,26 +97,15 @@ st.plotly_chart(fig, use_container_width=True)
 # ---------------------
 st.subheader("⏱ Pace Trend")
 
-pace_df = filtered.copy()
-
-# Ensure correct types
-pace_df["start_date"] = pd.to_datetime(pace_df["start_date"], errors="coerce")
-pace_df["pace_sec_per_km"] = pd.to_numeric(pace_df["pace_sec_per_km"], errors="coerce")
-
-# Remove bad data
-pace_df = pace_df.dropna(subset=["start_date", "pace_sec_per_km"])
-pace_df = pace_df[pace_df["pace_sec_per_km"] < 10000]  # filter weird pace values
-
-fig = px.scatter(
-    pace_df,
+pace_fig = px.scatter(
+    filtered,
     x="start_date",
     y="pace_sec_per_km",
     hover_data=["name", "distance_km"],
     trendline="lowess",
     labels={"pace_sec_per_km": "Seconds per km"},
 )
-
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(pace_fig, use_container_width=True)
 
 # ---------------------
 # ROUTE MAP SELECTOR
